@@ -5,12 +5,12 @@ cmake_minimum_required (VERSION 3.22)
 file(GLOB HEADERS
 	RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
 	CONFIGURE_DEPENDS
-	"include/*.h*"
+	"*.h*"
 )
 file(GLOB SRCS
 	RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
 	CONFIGURE_DEPENDS
-	"src/*.c*"
+	"*.c*"
 )
 
 # Generate resources
@@ -37,16 +37,25 @@ file(GLOB RESOURCES
 	"${CMAKE_CURRENT_BINARY_DIR}/rc/*"
 )
 
-# Create the DLL
+# Create the executable
 add_executable(hkdaemon "${SRCS}" "${RESOURCES}")
 
-# Configure the DLL
+# Configure the executable
 target_sources(hkdaemon PRIVATE "${HEADERS}")
 
 set_property(TARGET hkdaemon PROPERTY CXX_STANDARD 20)
 set_property(TARGET hkdaemon PROPERTY CXX_STANDARD_REQUIRED ON)
 set_property(TARGET hkdaemon PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-target_include_directories(hkdaemon PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/rc")
+target_include_directories(hkdaemon PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 
-target_link_libraries(hkdaemon PRIVATE shared)
+target_compile_options(hkdaemon PRIVATE "/Zc:__cplusplus")
+
+include(FetchContent)
+FetchContent_Declare(nlohmann_json
+	GIT_REPOSITORY	https://github.com/nlohmann/json.git
+	GIT_TAG			v3.11.2
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+target_link_libraries(hkdaemon PRIVATE TermAPI filelib nlohmann_json::nlohmann_json)
