@@ -7,6 +7,11 @@
 #include <TermAPI.hpp>
 #include <envpath.hpp>
 
+/**
+ * @brief			Separates the low and high order bytes from the given `LPARAM`.
+ * @param lParam	The lParam member of the WM_HOTKEY message type.
+ * @returns			A pair with the key and modifier values, respectively.
+ */
 inline std::pair<int, int> ParseWM_HotkeyLParam(LPARAM lParam)
 {
 	return{ (lParam >> 16) & 0xFFF, lParam & 0xFFF };
@@ -33,23 +38,18 @@ int main(const int argc, char** argv)
 			hkdaemon::config::WriteTo(cfgPath);
 		auto cfg{ hkdaemon::config::ReadFrom(cfgPath) };
 
-	#ifdef _DEBUG
-		if (cfg.hotkeys.empty()) {
-			// register a hotkey for debugging
-			hkdaemon::hotkey hk{ "echo \"Hello World!\"", 1, hkdaemon::Modifiers::Ctrl | hkdaemon::Modifiers::Shift, VK_A };
-			hk.Register();
-			cfg.hotkeys.emplace_back(hk);
-		}
-	#endif
+		// register a hotkey for debugging
+		hkdaemon::hotkey hk{ "echo \"Hello World!\"", 1, hkdaemon::Modifiers::Ctrl | hkdaemon::Modifiers::Shift, VK_A };
+		hk.Register();
+		cfg.hotkeys.emplace_back(hk);
 
 		MSG msg;
 		while (GetMessage(&msg, NULL, 0, 0)) {
 			switch (msg.message) {
 			case WM_HOTKEY: {
 				const auto id{ msg.wParam };
-				const auto& [key, mod] { ParseWM_HotkeyLParam(msg.lParam) };
 				for (const auto& hk : cfg.hotkeys) {
-					if (hk.id == id && hk.vk == key && hk.fsModifiers == mod) {
+					if (hk.id == id) {
 						int rc{ hk.ExecuteAction(std::clog) };
 						break;
 					}
