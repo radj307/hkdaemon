@@ -5,6 +5,7 @@
 #include <sysarch.h>
 #include <process.hpp>
 #include <fileio.hpp>
+#include <make_exception.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -23,48 +24,64 @@ namespace hkdaemon {
 	};
 	$make_bitfield_operators(Modifiers, uint16_t);
 
+	inline std::string GetLastErrorMessage()
+	{
+		constexpr const unsigned BUFFER_SIZE{ 256u };
+		char msg[BUFFER_SIZE];
+		FormatMessage(
+			FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			0,
+			errno,
+			0,
+			msg,
+			BUFFER_SIZE,
+			0
+		);
+		return{ msg };
+	}
+
 	struct hotkey {
 		static HWND DefaultHWnd;
 
 		int32_t id{ NULL };
-		uint32_t fsModifiers{ NULL };
-		uint32_t vk{ NULL };
+		uint32_t modifiers{ NULL };
+		uint32_t key{ NULL };
 		action action;
-	private:
 		bool registered{ false };
+	private:
 		bool isRegistered{ false };
 	public:
 
-		CONSTEXPR hotkey()
+		CONSTEXPR hotkey() = default;
+		CONSTEXPR hotkey(const int32_t id, const uint32_t modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ modifiers }, key{ key }, registered{ registered }
 		{
-			if (this->registered) ReRegister();
+			if (this->registered) { Register(); }
 		}
-		CONSTEXPR hotkey(const int32_t id, const uint32_t fsModifiers, const uint32_t vk, const bool registered = false) : id{ id }, fsModifiers{ fsModifiers }, vk{ vk }, registered{ registered }
+		CONSTEXPR hotkey(const int32_t id, const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }
 		{
-			if (this->registered) ReRegister();
+			if (this->registered) { Register(); }
 		}
-		CONSTEXPR hotkey(const int32_t id, const Modifiers modifiers, const uint32_t vk, const bool registered = false) : id{ id }, fsModifiers{ static_cast<uint32_t>(modifiers) }, vk{ vk }, registered{ registered }
+		CONSTEXPR hotkey(std::string const& actionCommandline, const int32_t id, const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }, action{ actionCommandline }
 		{
-			if (this->registered) ReRegister();
-		}
-		CONSTEXPR hotkey(std::string const& actionCommandline, const int32_t id, const Modifiers modifiers, const uint32_t vk, const bool registered = false) : id{ id }, fsModifiers{ static_cast<uint32_t>(modifiers) }, vk{ vk }, registered{ registered }, action{ actionCommandline }
-		{
-			if (this->registered) ReRegister();
+			if (this->registered) { Register(); }
 		}
 		~hotkey() { UnRegister(); }
 
-		Modifiers GetModifiers() const { return static_cast<Modifiers>(fsModifiers); }
-		void SetModifiers(const Modifiers modifiers) { fsModifiers = static_cast<uint32_t>(modifiers); }
-		void AddModifiers(const Modifiers modifiers) { fsModifiers = static_cast<uint32_t>(static_cast<uint16_t>(fsModifiers) | static_cast<uint16_t>(modifiers)); }
-		void RemoveModifiers(const Modifiers modifiers) { fsModifiers = static_cast<uint32_t>(static_cast<uint16_t>(fsModifiers) & ~static_cast<uint16_t>(modifiers)); }
+		Modifiers GetModifiers() const { return static_cast<Modifiers>(modifiers); }
+		void SetModifiers(const Modifiers modifiers) { this->modifiers = static_cast<uint32_t>(modifiers); }
+		void AddModifiers(const Modifiers modifiers) { this->modifiers = static_cast<uint32_t>(static_cast<uint16_t>(modifiers) | static_cast<uint16_t>(modifiers)); }
+		void RemoveModifiers(const Modifiers modifiers) { this->modifiers = static_cast<uint32_t>(static_cast<uint16_t>(modifiers) & ~static_cast<uint16_t>(modifiers)); }
+
+		bool GetIsRegistered() const { return isRegistered; }
 
 		void Register(HWND hWnd = DefaultHWnd)
 		{
 			if (isRegistered) return;
 
-			if (registered = RegisterHotKey(hWnd, id, fsModifiers, vk)) {
+			if (registered = RegisterHotKey(hWnd, id, modifiers, key)) {
 				isRegistered = true;
-			} // TODO: error handling
+			}
+			else throw make_exception(GetLastErrorMessage());
 		}
 		void UnRegister(HWND hWnd = DefaultHWnd)
 		{
@@ -72,7 +89,8 @@ namespace hkdaemon {
 
 			if (registered = UnregisterHotKey(hWnd, id)) {
 				isRegistered = false;
-			} // TODO: error handling
+			}
+			else throw make_exception(GetLastErrorMessage());
 		}
 		void ReRegister(HWND hWnd = DefaultHWnd)
 		{
@@ -95,7 +113,8 @@ namespace hkdaemon {
 			return action.ExecuteCommandline(); //< don't forward commandline output
 		}
 
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(hotkey, id, fsModifiers, vk, registered, action);
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(hotkey, id, modifiers, key, registered, action);
+
 	};
 	inline HWND hotkey::DefaultHWnd{ NULL };
 }

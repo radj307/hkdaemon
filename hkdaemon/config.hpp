@@ -9,6 +9,15 @@ namespace hkdaemon {
 
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(config, hotkeys);
 
+		void InitializeHotkeys()
+		{
+			for (auto& it : hotkeys) {
+				if (it.registered && !it.GetIsRegistered()) {
+					it.Register();
+				}
+			}
+		}
+
 		static config ReadFrom(std::filesystem::path const& path)
 		{
 			nlohmann::json j;
@@ -17,12 +26,8 @@ namespace hkdaemon {
 		}
 		static bool WriteTo(std::filesystem::path const& path, config const& cfg = {})
 		{
-			return file::write(path, nlohmann::json{ cfg }.dump());
-		}
-		static bool WriteToWithExample(std::filesystem::path const& path)
-		{
-			return file::write(path, nlohmann::json{ config{ {
-			} } }.dump());
+			nlohmann::json j = cfg;
+			return file::write(path, std::setw(2), j);
 		}
 	};
 }
