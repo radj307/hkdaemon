@@ -1,5 +1,6 @@
 #pragma once
 #include "WindowsLite.h"
+#include "action.hpp"
 
 #include <sysarch.h>
 #include <process.hpp>
@@ -10,21 +11,6 @@
 #include <vector>
 
 namespace hkdaemon {
-	struct action {
-		std::string commandline;
-		bool forwardOutput{ true };
-
-		int ExecuteCommandline() const
-		{
-			return process::exec(commandline, process::Mode::READ | process::Mode::TEXT);
-		}
-		int ExecuteCommandline(std::stringstream* buffer) const
-		{
-			return process::exec(buffer, commandline, process::Mode::READ | process::Mode::TEXT);
-		}
-	};
-	NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(action, commandline, forwardOutput);
-
 	enum class Modifiers : uint16_t {
 		None = 0,
 		Alt = MOD_ALT,
@@ -112,21 +98,4 @@ namespace hkdaemon {
 		NLOHMANN_DEFINE_TYPE_INTRUSIVE(hotkey, id, fsModifiers, vk, registered, action);
 	};
 	inline HWND hotkey::DefaultHWnd{ NULL };
-
-	struct config {
-		std::vector<hotkey> hotkeys;
-
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(config, hotkeys);
-
-		static config ReadFrom(std::filesystem::path const& path)
-		{
-			nlohmann::json j;
-			file::read(path) >> j;
-			return j.get<config>();
-		}
-		static bool WriteTo(std::filesystem::path const& path, config const& cfg = {})
-		{
-			return file::write(path, nlohmann::json{ cfg }.dump());
-		}
-	};
 }
