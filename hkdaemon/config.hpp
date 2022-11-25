@@ -1,6 +1,8 @@
 #pragma once
 #include "hotkey.hpp"
 
+#include <fileio.hpp>
+
 namespace hkdaemon {
 	struct config {
 		std::vector<hotkey> hotkeys;
@@ -16,6 +18,11 @@ namespace hkdaemon {
 		static bool WriteTo(std::filesystem::path const& path, config const& cfg = {})
 		{
 			return file::write(path, nlohmann::json{ cfg }.dump());
+		}
+		static bool WriteToWithExample(std::filesystem::path const& path)
+		{
+			return file::write(path, nlohmann::json{ config{ {
+			} } }.dump());
 		}
 	};
 }
