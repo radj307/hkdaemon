@@ -8,7 +8,7 @@
 namespace hkdaemon {
 	struct action {
 		std::string commandline;
-		bool forwardOutput{ true };
+		bool fwdSTDIO{ true };
 
 		int ExecuteCommandline() const
 		{
@@ -19,5 +19,5 @@ namespace hkdaemon {
 			return process::exec(buffer, commandline, process::Mode::READ | process::Mode::TEXT);
 		}
 	};
-	NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(action, commandline, forwardOutput);
+	NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(action, commandline, fwdSTDIO);
 }

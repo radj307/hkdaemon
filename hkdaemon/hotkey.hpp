@@ -40,6 +40,14 @@ namespace hkdaemon {
 		return{ msg };
 	}
 
+	static struct {
+	private:
+		mutable int32_t value{ 1 };
+
+	public:
+		CONSTEXPR int32_t next() const { return value++; }
+	} hotkey_id_sequencer;
+
 	struct hotkey {
 		static HWND DefaultHWnd;
 
@@ -52,16 +60,16 @@ namespace hkdaemon {
 		bool isRegistered{ false };
 	public:
 
-		CONSTEXPR hotkey() = default;
-		CONSTEXPR hotkey(const int32_t id, const uint32_t modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ modifiers }, key{ key }, registered{ registered }
+		CONSTEXPR hotkey() : id{ hotkey_id_sequencer.next() } {}
+		CONSTEXPR hotkey(const uint32_t modifiers, const uint32_t key, const bool registered = false) : id{ hotkey_id_sequencer.next() }, modifiers{ modifiers }, key{ key }, registered{ registered }
 		{
 			if (this->registered) { Register(); }
 		}
-		CONSTEXPR hotkey(const int32_t id, const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }
+		CONSTEXPR hotkey(const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ hotkey_id_sequencer.next() }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }
 		{
 			if (this->registered) { Register(); }
 		}
-		CONSTEXPR hotkey(std::string const& actionCommandline, const int32_t id, const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ id }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }, action{ actionCommandline }
+		CONSTEXPR hotkey(std::string const& actionCommandline, const Modifiers modifiers, const uint32_t key, const bool registered = false) : id{ hotkey_id_sequencer.next() }, modifiers{ static_cast<uint32_t>(modifiers) }, key{ key }, registered{ registered }, action{ actionCommandline }
 		{
 			if (this->registered) { Register(); }
 		}
@@ -105,7 +113,7 @@ namespace hkdaemon {
 		}
 		int ExecuteAction(std::ostream& os) const
 		{
-			if (action.forwardOutput) {
+			if (action.fwdSTDIO) {
 				std::stringstream ss;
 				ss.set_rdbuf(os.rdbuf());
 				return action.ExecuteCommandline(&ss);
@@ -113,7 +121,7 @@ namespace hkdaemon {
 			return action.ExecuteCommandline(); //< don't forward commandline output
 		}
 
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(hotkey, id, modifiers, key, registered, action);
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(hotkey, modifiers, key, registered, action);
 
 	};
 	inline HWND hotkey::DefaultHWnd{ NULL };

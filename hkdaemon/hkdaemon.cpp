@@ -7,6 +7,9 @@
 #include <TermAPI.hpp>
 #include <envpath.hpp>
 
+#include <shellapi.h>
+#include <future>
+
 /**
  * @brief			Separates the low and high order bytes from the given `LPARAM`.
  * @param lParam	The lParam member of the WM_HOTKEY message type.
@@ -36,6 +39,9 @@ struct print_help {
 			<< "  -v, --version         Prints the current version number, then exits." << '\n'
 			<< "  -c, --config <PATH>   Specifies the location of the hotkey configuration file." << '\n'
 			<< "  -n, --new             If the specified hotkey config doesn't exist at the specified location, a new one is created." << '\n'
+			<< "  -H, --hk <JSON>       Imports hotkeys directly from provided JSON data." << '\n'
+			<< "      --hk-example      Prints a blank hotkey template to STDOUT for use with the above option, then exits." << '\n'
+			<< "      --dump            Dumps the finalized hotkey config to STDOUT, then exits." << '\n'
 			;
 	}
 };
@@ -44,7 +50,8 @@ int main(const int argc, char** argv)
 {
 	try {
 		opt3::ArgManager args{ argc, argv,
-			opt3::make_template(opt3::ConflictStyle::Conflict, opt3::CaptureStyle::Required, 'c', "config")
+			opt3::make_template(opt3::ConflictStyle::Conflict, opt3::CaptureStyle::Required, 'c', "config"),
+			opt3::make_template(opt3::ConflictStyle::None, opt3::CaptureStyle::Required, 'H', "hk")
 		};
 		env::PATH PATH{};
 		const auto& [programDir, programName] { PATH.resolve_split(argv[0]) };
@@ -57,6 +64,11 @@ int main(const int argc, char** argv)
 			std::cout << hkdaemon_VERSION_EXTENDED << std::endl;
 			return 2;
 		}
+		else if (args.checkopt("hk-example")) {
+			nlohmann::json j = hkdaemon::hotkey{};
+			std::cout << j << std::endl;
+			return 3;
+		}
 
 		const auto cfgPath{ args.castgetv_any<std::filesystem::path, opt3::Flag, opt3::Option>('c', "config").value_or(programDir / std::filesystem::path{ programName }.replace_extension("json")) };
 
@@ -65,16 +77,43 @@ int main(const int argc, char** argv)
 			std::cout << "Successfully created a new hotkey config at " << cfgPath << std::endl;
 			return 3;
 		}
-		else if (!file::exists(cfgPath))
-			throw make_exception("Couldn't find a hotkey config at ", cfgPath);
 
-		auto cfg{ hkdaemon::config::ReadFrom(cfgPath) };
+		hkdaemon::config cfg;
+
+		if (file::exists(cfgPath))
+			cfg = hkdaemon::config::ReadFrom(cfgPath);
+
+		if (const auto& importHotkeys{ args.getv_all<opt3::Flag, opt3::Option>('H', "hk") }; !importHotkeys.empty()) {
+			bool atLeastOne{ false };
+			cfg.hotkeys.reserve(cfg.hotkeys.size() + importHotkeys.size());
+			for (auto& hotkeyJSON : importHotkeys) {
+				try {
+					cfg.hotkeys.emplace_back(nlohmann::json{ hotkeyJSON }.get<hkdaemon::hotkey>());
+					atLeastOne = true;
+				} catch (const std::exception& ex) {
+					std::cerr << "The hotkey specified by \"" << hotkeyJSON << "\" was skipped because it caused an exception: " << ex.what() << std::endl;
+				}
+			}
+			cfg.hotkeys.shrink_to_fit(); //< unallocate elements that had invalid JSON data
+			if (atLeastOne) {
+				if (hkdaemon::config::WriteTo(cfgPath, cfg)) {
+					std::cout << "Successfully saved imported hotkeys to " << cfgPath << std::endl;
+				}
+				else throw make_exception("An error occurred while attempting to write to ", cfgPath);
+			}
+		}
+		if (args.checkopt("dump")) {
+			nlohmann::json j = cfg;
+			std::cout << j << std::endl;
+			return 4;
+		}
+
 		cfg.InitializeHotkeys();
 
 	#ifdef _DEBUG
 		// register a hotkey for debugging
 		if (cfg.hotkeys.empty()) {
-			hkdaemon::hotkey hk{ "echo \"Hello World!\"", 1, hkdaemon::Modifiers::Ctrl | hkdaemon::Modifiers::Shift, VK_A };
+			hkdaemon::hotkey hk{ "echo \"" + color::setcolor::red.as_sequence() + "Hello World!" + color::setcolor::reset.as_sequence() + "\"", hkdaemon::Modifiers::Ctrl | hkdaemon::Modifiers::Shift, VK_A };
 			hk.Register();
 			cfg.hotkeys.emplace_back(hk);
 			hkdaemon::config::WriteTo(cfgPath, cfg); //< write the debug config to disk
@@ -88,7 +127,9 @@ int main(const int argc, char** argv)
 				const auto id{ msg.wParam };
 				for (const auto& hk : cfg.hotkeys) {
 					if (hk.id == id) {
-						int rc{ hk.ExecuteAction(std::clog) };
+						auto t{ std::async(std::launch::async, [&hk]() { return hk.ExecuteAction(std::clog); }) };
+
+
 						break;
 					}
 				}
